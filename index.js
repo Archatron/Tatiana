@@ -5,7 +5,6 @@ const client = new Discord.Client({disableEveryone: true});
  const ytdl = require("ytdl-core");
  const fs = require('fs');
  var guildconf = require('./guildconf.json');
- const botsettings = require('./botsettings.json')
  client.commands = new Discord.Collection();
  const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith('.js'));
 
