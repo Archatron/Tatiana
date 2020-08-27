@@ -12,8 +12,7 @@ const client = new Discord.Client({disableEveryone: true});
  const { error } = require('console');
 client.once('ready', () => {
     console.log('This bot is online!');
-    client.user.setActivity('this server', {type: "WATCHING"})
-        .then(presence => console.log(`Activity set to ${presence.activities[0].name}`))
+    client.user.setActivity(client.guilds.cache.size + " servers", {type: "WATCHING"})
 })
 
     for(const file of commandFiles) {
