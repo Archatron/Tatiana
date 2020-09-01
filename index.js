@@ -8,6 +8,8 @@ const client = new Discord.Client({disableEveryone: true});
  client.commands = new Discord.Collection();
  const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith('.js'));
 
+const queue = new Map()
+
  const { error } = require('console');
 client.once('ready', () => {
     console.log('This bot is online!');
