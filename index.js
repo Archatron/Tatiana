@@ -244,4 +244,145 @@ client.once("reconnecting", () => {
     serverQueue.textChannel.send(`Start playing: **${song.title}**`);
   }
   
+client.on('message', async message => {
+    let msg = message.content.toLowerCase();
+    
+    
+    if (!guildconf[message.channel.id]){
+        guildconf[message.channel.id] = {
+            prefix: 'a!'
+        }
+    }
+    fs.writeFile('./guildConf.json', JSON.stringify(guildconf, null, 2), (err) =>{
+        if (err) console.log(err);
+    })
+    
+    if (message.author.bot) return
+    if (!message.content.startsWith(guildconf[message.channel.id].prefix)) return
+
+    const args = message.content.substring(PREFIX.length).split(" ")
+    const serverQueue = queue.get(message.guild.id)
+
+    if(msg.startsWith(guildconf[message.channel.id].prefix + 'play')){
+        const voiceChannel = message.member.voice.channel
+        if(!voiceChannel) return message.channel.send("You need to be in a voice channel to play music.")
+        const permissions = voiceChannel.permissionsFor(message.client.user)
+        if(!permissions.has('CONNECT')) return message.channel.send("I don\'t have permissions to connect to a voice channel.")
+        if(!permissions.has('SPEAK')) return message.channel.send("I don\'t have permissions to speak in channel.")
+
+        const songInfo = await ytdl.getInfo(args[1])
+        const song = {
+            title: Util.escapeMarkdown(songInfo.title),
+            url: songInfo.video_url
+        }
+
+        if(!serverQueue) {
+            const queueConstruct = {
+                textChannel: message.channel,   
+                voiceChannel: voiceChannel,
+                connection: null,
+                songs: [],
+                volume: 3,
+                playing: true
+            }
+            queue.set(message.guild.id, queueConstruct)
+
+            queueConstruct.songs.push(song)
+
+            try {
+                var connection = await voiceChannel.join()
+                queueConstruct.connection = connection
+                play(message.guild, queueConstruct.songs[0])
+            } catch (error) {
+                console.log(`There was an error connecting to the voice channel: ${error}`)
+                queue.delete(message.guild.id)
+                return message.channel.send(`There was an error connecting to the voice channel: ${error}`)
+            }
+        } else {
+            serverQueue.songs.push(song)
+            return message.channel.send(`**${song.title}** has been added to the queue`)
+        }
+        return undefined
+
+    }  else if(msg.startsWith(guildconf[message.channel.id].prefix + 'stop')){
+        if(!message.member.voice.channel) return message.channel.send('You need to be in a voice channel to stop music.')
+        if(!serverQueue) return message.channel.send("There is nothing playing")
+        serverQueue.songs = []
+        serverQueue.connection.dispatcher.end()
+        message.channel.send("I have stopped the music for you")
+        return undefined
+    } else if(msg.startsWith(guildconf[message.channel.id].prefix + 'skip')){
+        if(!message.member.voice.channel) return message.channel.send("You need to be in a voice channel to skip music.")
+        if(!serverQueue) return message.channel.send("There is nothing playing")
+        serverQueue.connection.dispatcher.end()
+        message.channel.send("I have skipped music for you")
+        return undefined
+    } else if(msg.startsWith(guildconf[message.channel.id].prefix + 'volume')){
+        if(!message.member.voice.channel) return message.channel.send("You need to be in a voice channel to use music commands.")
+        if(!serverQueue) return message.channel.send("There is nothing playing.")
+        if(!args[1]) return message.channel.send(`That volume is **${serverQueue.volume}**s`)
+        if(isNaN(args[1])) return message.channel.send("That is not a valid amount to change the volume to!")
+        serverQueue.volume = args[1]
+        serverQueue.connection.dispatcher.setVolumeLogarithmic(args[1] / 5)
+        message.channel.send(`I have changed the volume to **${args[1]}**`)
+        return undefined
+    } else if(msg.startsWith(guildconf[message.channel.id].prefix + 'nowplaying')){
+        if(!serverQueue) return message.channel.send('There is nothing playing.')
+        message.channel.send(`Now Playing **${serverQueue.songs[0].title}**`)
+    } else if(msg.startsWith(guildconf[message.channel.id].prefix + 'queue')){
+        if(!serverQueue) return message.channel.send("There is nothing playing")
+        message.channel.send(`
+__**Song Queue:**__
+${serverQueue.songs.map(song => `**-** ${song.title}`).join('\n')}
+
+**Now Playing:** ${serverQueue.songs[0].title}
+        `, {split: true})
+        return undefined
+    } else if(msg.startsWith(guildconf[message.channel.id].prefix + 'pause')){
+        if(!message.member.voice.channel) return message.channel.send('You need to be in a voice channel to use the pause command')
+        if(!serverQueue) return message.channel.send('There is nothing playing.')
+        if(!serverQueue.playing) return message.channel.send("The music is already paused")
+        serverQueue.playing = false
+        serverQueue.connection.dispatcher.pause()
+        message.channel.send("I have now paused the music for you")
+        return undefined
+    } else if(msg.startsWith(guildconf[message.channel.id].prefix + 'resume')){
+        if(!message.member.voice.channel) return message.channel.send("You need to be in a voice channel to resume the music")
+        if(!serverQueue) return message.channel.send("There is nothing playing")
+        if(serverQueue.playing) return message.channel.send("The music is already playing.")
+        serverQueue.playing = true
+        serverQueue.connection.dispatcher.resume()
+        message.channel.send("I have now resumed the music for you")
+        return undefined
+    } else if(msg.startsWith(guildconf[message.channel.id].prefix + 'bassboost')){
+        if(!message.member.voice.channel) return message.channel.send("You need to be in a voice channel to use music commands.")
+        if(!serverQueue) return message.channel.send("There is nothing playing.")
+        serverQueue.connection.dispatcher.setVolumeLogarithmic(6 / 5)
+        message.channel.send(`I have bass boosted the song!`)
+        return undefined
+    } 
+})
+
+function play(guild, song) {
+    const serverQueue = queue.get(guild.id)
+
+    if(!song) {
+        serverQueue.voiceChannel.leave()
+        queue.delete(guild.id)
+        return
+    }
+
+    const dispatcher = serverQueue.connection.play(ytdl(song.url))
+        .on('finish', () => {
+            serverQueue.songs.shift()
+            play(guild, serverQueue.songs[0])
+        })
+        .on('error', error => {
+            console.log(error)
+        })
+        dispatcher.setVolumeLogarithmic(serverQueue.volume / 5)
+
+        serverQueue.textChannel.send(`Started playing **${song.title}**`)
+}
+
 client.login(process.env.token);
