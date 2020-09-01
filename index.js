@@ -52,7 +52,47 @@ client.on('message', message => {
       client.commands.get('ban').execute(message, args)
      }
      if (msg.startsWith(guildconf[message.channel.id].prefix + 'help')){
-        client.commands.get('help').execute(message, args)
+        const embed = new Discord.MessageEmbed()
+        .setTitle('🛠Commands')
+        .addField('⛓General', `a!help general - general bot commands`)
+        .addField('⚙Moderate', `a!help moderate - moderation commands`)
+        .addField('🏓Fun', `a!help fun - Fun commands!`)
+        .addField(`♫Music`, `a!help music - Music Commands!`)
+        .addField(`Help`, `a!help - Shows this message\na!prefix - Changes the bot's prefix`)
+        .setColor(0x7f32a8)
+        .setTimestamp()
+        if(!args[1]) return message.channel.send(embed)
+      }
+      if ((args[1]) == 'general'){
+        const general = new Discord.MessageEmbed()
+        .setTitle('🛠General')
+        .addField('⛓General', `a!purge - Deletes the amount of messages you choose (below 100)\na!invite - Invite TatianaBot to your server!`)
+        .setColor(0x7f32a8)
+        .setTimestamp()
+        return message.channel.send(general)
+    }
+    if ((args[1]) == 'moderate'){
+        const general = new Discord.MessageEmbed()
+        .setTitle('🛠General')
+        .addField('⚙Moderate', `a!ban - Bans a server member.\na!kick - Kicks a server member`)
+        .setColor(0x7f32a8)
+        .setTimestamp()
+        return message.channel.send(general)
+    }
+    if ((args[1]) == 'fun'){
+        const fun = new Discord.MessageEmbed()
+        .setTitle('🛠General')
+        .addField('🏓Fun', `a!rps - A game of rock paper scissors\na!8ball - Ask away your questions\na!howgay - Decides the rate for you or your friend!\na!kill - Kill whoever you mention`)
+        .setColor(0x7f32a8)
+        .setTimestamp()
+        return message.channel.send(fun)
+    }
+    if ((args[1]) == 'music'){
+        const music = new Discord.MessageEmbed()
+        .setTitle('🛠Commands')
+        .addField('♫Music', `a!play - plays the youtue url you send\na!stop - stops the song playing\na!skip - skips a song in the queue.\nqueue - shows the current queue\n\nvolume args[1] - changes the volume or displays the current volume\nbassboost - bass boost the songs you are playing!`)
+        .setColor(0x7f32a8);
+         message.channel.send(music);
     }
      if (msg.startsWith(guildconf[message.channel.id].prefix + 'invite')){
         client.commands.get('invite').execute(message, args)
