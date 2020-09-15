@@ -1,16 +1,20 @@
 const Discord = require('discord.js')
+const { Client, Util } = require('discord.js')
 const client = new Discord.Client({disableEveryone: true});
  const prefix = 'a!';
+ const PREFIX = 'a!';
+ const Youtube = require('simple-youtube-api')
+ const youtube = new Youtube("YOUTUBE_API_KEY")
  const queue = new Map();
  const ytdl = require("ytdl-core");
  const fs = require('fs');
+ const covid = require('novelcovid')
  var guildconf = require('./guildconf.json');
  client.commands = new Discord.Collection();
  const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith('.js'));
 
-const queue = new Map()
-
  const { error } = require('console');
+const { url } = require('inspector');
 client.once('ready', () => {
     console.log('This bot is online!');
     client.user.setActivity(client.guilds.cache.size + " servers", {type: "WATCHING"})
@@ -131,121 +135,11 @@ client.on('message', message => {
     if (msg.startsWith(guildconf[message.channel.id].prefix + 'kill')){
         client.commands.get('kill').execute(message, args)
     }
+    if (msg.startsWith(guildconf[message.channel.id].prefix + 'purge')) {
+      client.commands.get('purge').execute(message, args)
+    }
 })
-client.once("reconnecting", () => {
-    console.log("Reconnecting!");
-  });
-  
-  client.once("disconnect", () => {
-    console.log("Disconnect!");
-  });
-  
-  client.on("message", async message => {
-    if (message.author.bot) return;
-    if (!message.content.startsWith(prefix)) return;
-  
-    const serverQueue = queue.get(message.guild.id);
-  
-    if (message.content.startsWith(`${prefix}play`)) {
-      execute(message, serverQueue);
-      return;
-    } else if (message.content.startsWith(`${prefix}skip`)) {
-      skip(message, serverQueue);
-      return;
-    } else if (message.content.startsWith(`${prefix}stop`)) {
-      stop(message, serverQueue);
-      return;
-    }
-  });
-  
-  async function execute(message, serverQueue) {
-    const args = message.content.split(" ");
-  
-    const voiceChannel = message.member.voice.channel;
-    if (!voiceChannel)
-      return message.channel.send(
-        "You need to be in a voice channel to play music!"
-      );
-    const permissions = voiceChannel.permissionsFor(message.client.user);
-    if (!permissions.has("CONNECT") || !permissions.has("SPEAK")) {
-      return message.channel.send(
-        "I need the permissions to join and speak in your voice channel!"
-      );
-    }
-  
-    const songInfo = await ytdl.getInfo(args[1]);
-    const song = {
-      title: songInfo.title,
-      url: songInfo.video_url
-    };
-  
-    if (!serverQueue) {
-      const queueContruct = {
-        textChannel: message.channel,
-        voiceChannel: voiceChannel,
-        connection: null,
-        songs: [],
-        volume: 5,
-        playing: true
-      };
-  
-      queue.set(message.guild.id, queueContruct);
-  
-      queueContruct.songs.push(song);
-  
-      try {
-        var connection = await voiceChannel.join();
-        queueContruct.connection = connection;
-        play(message.guild, queueContruct.songs[0]);
-      } catch (err) {
-        console.log(err);
-        queue.delete(message.guild.id);
-        return message.channel.send(err);
-      }
-    } else {
-      serverQueue.songs.push(song);
-      return message.channel.send(`${song.title} has been added to the queue!`);
-    }
-  }
-  
-  function skip(message, serverQueue) {
-    if (!message.member.voice.channel)
-      return message.channel.send(
-        "You have to be in a voice channel to stop the music!"
-      );
-    if (!serverQueue)
-      return message.channel.send("There is no song that I could skip!");
-    serverQueue.connection.dispatcher.end();
-  }
-  
-  function stop(message, serverQueue) {
-    if (!message.member.voice.channel)
-      return message.channel.send(
-        "You have to be in a voice channel to stop the music!"
-      );
-    serverQueue.songs = [];
-    serverQueue.connection.dispatcher.end();
-  }
-  
-  function play(guild, song) {
-    const serverQueue = queue.get(guild.id);
-    if (!song) {
-      serverQueue.voiceChannel.leave();
-      queue.delete(guild.id);
-      return;
-    }
-  
-    const dispatcher = serverQueue.connection
-      .play(ytdl(song.url))
-      .on("finish", () => {
-        serverQueue.songs.shift();
-        play(guild, serverQueue.songs[0]);
-      })
-      .on("error", error => console.error(error));
-    dispatcher.setVolumeLogarithmic(serverQueue.volume / 5);
-    serverQueue.textChannel.send(`Start playing: **${song.title}**`);
-  }
-  
+
 client.on('message', async message => {
     let msg = message.content.toLowerCase();
     
@@ -264,6 +158,8 @@ client.on('message', async message => {
 
     const args = message.content.substring(PREFIX.length).split(" ")
     const serverQueue = queue.get(message.guild.id)
+    const searchString = args.slice(1).join(' ')
+    const url = args[1] ? args[1].replace(/<(.+)>/g, '$1') : ''
 
     if(msg.startsWith(guildconf[message.channel.id].prefix + 'play')){
         const voiceChannel = message.member.voice.channel
@@ -271,11 +167,22 @@ client.on('message', async message => {
         const permissions = voiceChannel.permissionsFor(message.client.user)
         if(!permissions.has('CONNECT')) return message.channel.send("I don\'t have permissions to connect to a voice channel.")
         if(!permissions.has('SPEAK')) return message.channel.send("I don\'t have permissions to speak in channel.")
+        
+        try {
+          var video = await youtube.getVideoByID(url)
+        } catch {
+            try {
+              var videos = await youtube.searchVideos(searchString, 1)
+              var video = await youtube.getVideoByID(videos[0].id)
+            } catch {
+              return message.channel.send("I couldn\'t find any search results")
+            }
+        }
 
-        const songInfo = await ytdl.getInfo(args[1])
         const song = {
-            title: Util.escapeMarkdown(songInfo.title),
-            url: songInfo.video_url
+            id: video.id,
+            title: video.title,
+            url: `https://www.youtube.com/watch?v=${video.id}`
         }
 
         if(!serverQueue) {
@@ -285,7 +192,8 @@ client.on('message', async message => {
                 connection: null,
                 songs: [],
                 volume: 3,
-                playing: true
+                playing: true,
+                loop: false,
             }
             queue.set(message.guild.id, queueConstruct)
 
@@ -362,7 +270,14 @@ ${serverQueue.songs.map(song => `**-** ${song.title}`).join('\n')}
         serverQueue.connection.dispatcher.setVolumeLogarithmic(6 / 5)
         message.channel.send(`I have bass boosted the song!`)
         return undefined
-    } 
+    } else if (msg.startsWith(guildconf[message.channel.id].prefix + 'loop')){
+      if (!message.member.voice.channel) return message.channel.send('You need to be in a voice channel to do music commands!')
+      if(!serverQueue) return message.channel.send('There is nothing playing.')
+
+      serverQueue.loop = !serverQueue.loop
+
+      return message.channel.send(`I have now ${serverQueue.loop ? `**Enabled**` : `**Disabled**`} loop.`)
+    }
 })
 
 function play(guild, song) {
@@ -376,7 +291,7 @@ function play(guild, song) {
 
     const dispatcher = serverQueue.connection.play(ytdl(song.url))
         .on('finish', () => {
-            serverQueue.songs.shift()
+            if(!serverQueue.loop) serverQueue.songs.shift()
             play(guild, serverQueue.songs[0])
         })
         .on('error', error => {
@@ -387,4 +302,26 @@ function play(guild, song) {
         serverQueue.textChannel.send(`Started playing **${song.title}**`)
 }
 
-client.login(process.env.token);
+client.on('message', async message => {
+  if (message.content.startsWith(`${prefix}covid`)) {
+    const covidStats = await covid.all()
+
+    return message.channel.send(new Discord.MessageEmbed()
+        .setTitle('Covid19 Stats')    
+        .setColor("BLUE")
+        .addFields(
+          {name: `Cases`, value: covidStats.cases.toLocaleString(), inline: true },
+          {name: `Cases Today`, value: covidStats.todayCases.toLocaleString(), inline: true },
+          {name: `Deaths`, value: covidStats.deaths.toLocaleString(), inline: true },
+          {name: `Deaths Today`, value: covidStats.todayDeaths.toLocaleString(), inline: true },
+          {name: `Recovered`, value: covidStats.recovered.toLocaleString(), inline: true },
+          {name: `Recovered Today`, value: covidStats.todayRecovered.toLocaleString(), inline: true },
+          {name: `Infected Right Now`, value: covidStats.active.toLocaleString(), inline: true },
+          {name: `Critical Condition`, value: covidStats.critical.toLocaleString(), inline: true },
+          {name: `Tested`, value: covidStats.tests.toLocaleString(), inline: true },
+        )
+    )
+  }
+})
+
+client.login('TOKEN');
