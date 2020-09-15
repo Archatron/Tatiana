@@ -4,7 +4,7 @@ const client = new Discord.Client({disableEveryone: true});
  const prefix = 'a!';
  const PREFIX = 'a!';
  const Youtube = require('simple-youtube-api')
- const youtube = new Youtube(APIKEY)
+ const youtube = new Youtube(process.env.API);
  const queue = new Map();
  const ytdl = require("ytdl-core");
  const fs = require('fs');
@@ -324,4 +324,4 @@ client.on('message', async message => {
   }
 })
 
-client.login(process.env.TOKEN);
+bot.login(process.env.token);
